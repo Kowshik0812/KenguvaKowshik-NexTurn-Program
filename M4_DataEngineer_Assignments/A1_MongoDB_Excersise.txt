@@ -1,0 +1,172 @@
+1. Find High-Spending Users 
+Write a query to find users who have spent more than $500 in total across all 
+their orders. 
+
+db.orders.aggregate([
+  {
+    $group: {
+      _id: "$userId",
+      totalSpent: { $sum: "$totalAmount" }
+    }
+  },
+  {
+    $match: {
+      totalSpent: { $gt: 500 }
+    }
+  },
+  {
+    $lookup: {
+      from: "users",
+      localField: "_id",
+      foreignField: "userId",
+      as: "userDetails"
+    }
+  },
+  {
+    $unwind: "$userDetails"
+  },
+  {
+    $project: {
+      _id: 0,
+      userId: "$_id",
+      totalSpent: 1,
+      name: "$userDetails.name",
+      email: "$userDetails.email"
+    }
+  }
+]);
+
+**************************************************
+
+2. List Popular Products by Average Rating 
+Retrieve products that have an average rating greater than or equal to 4. 
+
+db.products.aggregate([
+  {
+    $unwind: "$ratings" 
+  },
+  {
+    $group: {
+      _id: "$productId",
+      averageRating: { $avg: "$ratings.rating" },
+      productName: { $first: "$name" },
+      category: { $first: "$category" }
+    }
+  },
+  {
+    $match: {
+      averageRating: { $gte: 4 } 
+    }
+  },
+  {
+    $sort: { averageRating: -1 } 
+  },
+  {
+    $project: {
+      _id: 0,
+      productId: "$_id",
+      productName: 1,
+      category: 1,
+      averageRating: 1
+    }
+  }
+]);
+
+*******************************************************
+
+3. Search for Orders in a Specific Time Range 
+Find all orders placed between "2024-12-01" and "2024-12-31". Ensure the result 
+includes the user name for each order. 
+
+db.orders.aggregate([
+  {
+    $match: {
+      orderDate: {
+        $gte: ISODate("2024-12-01T00:00:00Z"),
+        $lt: ISODate("2025-01-01T00:00:00Z")
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "users",
+      localField: "userId",
+      foreignField: "userId",
+      as: "userDetails"
+    }
+  },
+  {
+    $unwind: "$userDetails" 
+  },
+  {
+    $project: {
+      _id: 0,
+      orderId: 1,
+      orderDate: 1,
+      totalAmount: 1,
+      status: 1,
+      userName: "$userDetails.name",
+      userEmail: "$userDetails.email"
+    }
+  },
+  {
+    $sort: { orderDate: 1 }  }
+]);
+
+************************************************************
+
+4. Update Stock After Order Completion 
+When an order is placed, reduce the stock of each product by the quantity in the 
+order. For example, if 2 units of P001 were purchased, decrement its stock by 2. 
+
+db.orders.aggregate([
+  { $match: { orderId: "ORD001" } },
+  { $unwind: "$items" },
+  {
+    $project: {
+      productId: "$items.productId",
+      quantity: "$items.quantity"
+    }
+  },
+  {
+    $merge: {
+      into: "products",
+      whenMatched: [
+        { $set: { stock: { $subtract: ["$stock", "$quantity"] } } }
+      ],
+      whenNotMatched: "discard"
+    }
+  }
+]);
+
+
+****************************************************************
+
+5. Find Nearest Warehouse 
+Assume there’s a warehouses collection with geospatial data: 
+{ 
+"warehouseId": "W001", 
+"location": { "type": "Point", "coordinates": [-74.006, 
+40.7128] }, 
+"products": ["P001", "P002", "P003"] 
+} 
+
+
+
+db.warehouses.aggregate([
+  {
+    $geoNear: {
+      near: { type: "Point", coordinates: [-74.006, 40.7128] },  
+      distanceField: "distance",
+      maxDistance: 50000,  
+      spherical: true,
+      query: { products: "P001" }      }
+  },
+  {
+    $limit: 1  
+  }
+]);
+
+
+
+
